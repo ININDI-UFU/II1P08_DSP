@@ -17,9 +17,9 @@
 // ---------- Parâmetros do sinal ----------
 constexpr int   N  = 1024;    // número de amostras (potência de 2 -> exigido pela FFT real)
 constexpr float fs = 8000.0f; // frequência de amostragem [Hz]
-constexpr float f1 = 250.0f;  // tom 1 [Hz]
+constexpr float f1 = 100.0f;  // tom 1 [Hz] (mais distante da banda de 800 Hz)
 constexpr float f2 = 800.0f;  // tom 2 [Hz] -> é o tom que o filtro passa-faixa isola
-constexpr float f3 = 1500.0f; // tom 3 [Hz]
+constexpr float f3 = 2200.0f; // tom 3 [Hz] (mais distante da banda de 800 Hz)
 
 // dsps_tone_gen_f32 usa frequência normalizada pela Nyquist (fs/2): freq_norm = f / (fs/2)
 constexpr float toNyquist(float f) { return 2.0f * f / fs; }
@@ -59,7 +59,7 @@ void filtrarPassaFaixa(const float *entrada, float *saida) {
     float w1[2] = {0.0f, 0.0f};
     float w2[2] = {0.0f, 0.0f};
     dsps_biquad_f32(entrada, estagio1, N, bpfCoeffs, w1); // 1º estágio
-    dsps_biquad_f32(estagio1, saida, N, bpfCoeffs, w2);    // 2º estágio (em série)
+    dsps_biquad_f32(estagio1, saida, N, bpfCoeffs, w2);   // 2º estágio (em série)
 }
 
 // ---------- Etapa 3: espectro de magnitude em dB (janela + FFT) ----------
@@ -99,7 +99,7 @@ void calcularEspectroDb(const float *sinal, float *magnitudeDb) {
 // (magnitude em dB) na frequência -- para comparar diretamente antes/depois do filtro.
 void plotarResultados(const float *sinal, const float *filtrado,
                        const float *magnitudeDb, const float *magnitudeFiltradoDb) {
-    wserial.println("Espectro (FFT) do sinal 250 Hz + 800 Hz + 1.5 kHz @ fs=8 kHz");
+    wserial.println("Espectro (FFT) do sinal 100 Hz + 800 Hz + 2.2 kHz @ fs=8 kHz");
 
     // dt_ms=1 aproxima o eixo X por índice de amostra/bin (o período real de
     // amostragem, 1/fs = 0.125 ms, não é representável em ms inteiro).

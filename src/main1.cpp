@@ -1,4 +1,4 @@
-// Mesmo sinal do main0.cpp (soma de 3 senoides: 250 Hz + 800 Hz + 1.5 kHz,
+// Mesmo sinal do main0.cpp (soma de 3 senoides: 100 Hz + 800 Hz + 2.2 kHz,
 // fs=8 kHz, filtro passa-faixa isolando o tom de 800 Hz) só que gerado de
 // forma CONTÍNUA: aqui não existe buffer de N amostras computado uma vez em
 // setup() e plotado de uma vez só. Em vez disso, cada amostra é sintetizada
@@ -16,9 +16,9 @@
 
 // ---------- Parâmetros do sinal (iguais ao main0.cpp) ----------
 constexpr float fs = 8000.0f; // frequência de amostragem [Hz]
-constexpr float f1 = 250.0f;  // tom 1 [Hz]
+constexpr float f1 = 100.0f;  // tom 1 [Hz] (mais distante da banda de 800 Hz)
 constexpr float f2 = 800.0f;  // tom 2 [Hz] -> é o tom que o filtro passa-faixa isola
-constexpr float f3 = 1500.0f; // tom 3 [Hz]
+constexpr float f3 = 2200.0f; // tom 3 [Hz] (mais distante da banda de 800 Hz)
 
 constexpr uint32_t SAMPLE_PERIOD_US = (uint32_t)(1000000.0f / fs); // 125 us @ 8 kHz
 
@@ -74,7 +74,7 @@ void setup() {
     constexpr float bpfQ = 5.0f;
     dsps_biquad_gen_bpf0db_f32(bpfCoeffs, f2 / fs, bpfQ);
 
-    wserial.println("Gerador contínuo: 250 Hz + 800 Hz + 1.5 kHz @ fs=8 kHz (saída ao vivo na serial)");
+    wserial.println("Gerador contínuo: 100 Hz + 800 Hz + 2.2 kHz @ fs=8 kHz (saída ao vivo na serial)");
     nextSampleUs = micros();
 }
 
