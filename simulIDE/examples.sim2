@@ -1,0 +1,7 @@
+<circuit version="2.0.0-" rev="260501" stepSize="1000000" stepsPS="1000000" NLsteps="100000" reaStep="1000000" animate="0" anicurr="0" ansi="0" width="3200" height="2400" >
+
+<item itemtype="Subcircuit" CircId="devkitC-4" mainComp="false" Show_id="true" Show_Val="false" Pos="44,28" rotation="0" hflip="1" vflip="1" label="devkitC-4" idLabPos="0,-20" labelrot="0" valLabPos="-16,20" valLabRot="0">
+<mainCompProps MainCompId="Esp32-2" Program="G:/Meu Drive/SourceCode/0II1/II1P08_DSP/simulIDE/merged.bin" />
+</item>
+
+</circuit>
