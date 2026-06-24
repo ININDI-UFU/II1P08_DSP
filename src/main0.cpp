@@ -13,8 +13,6 @@
 #include "dsps_biquad.h"
 #include "dsps_biquad_gen.h"
 #include "dsps_wind_hann.h"
-#include "dsps_mul.h"
-#include "dsps_mem.h"
 
 // ---------- Parâmetros do sinal ----------
 constexpr int   N  = 1024;    // número de amostras (potência de 2 -> exigido pela FFT real)
@@ -73,26 +71,26 @@ void calcularEspectroDb(const float *sinal, float *magnitudeDb) {
     static float fft_buf[N * 2];
     static float hann[N];
 
+    // dsps_mul_f32/dsps_memset com stride != 1 (escrever direto nas posições
+    // pares do buffer intercalado) chegaram a corromper memória vizinha nessa
+    // versão do esp-dsp -- a doc já avisa "step deveria ser 1 por padrão", ou
+    // seja, stride != 1 não é garantido na variante otimizada em assembly.
+    // Por segurança, janela e empacotamento ficam em loop manual (stride 1 só).
     dsps_wind_hann_f32(hann, N);
-    dsps_memset(fft_buf, 0, sizeof(fft_buf));
-    dsps_mul_f32(sinal, hann, fft_buf, N, 1, 1, 2); // fft_buf[2*i] = sinal[i] * hann[i]
+    for (int i = 0; i < N; i++) {
+        fft_buf[2 * i + 0] = sinal[i] * hann[i]; // real, já com janela aplicada
+        fft_buf[2 * i + 1] = 0.0f;               // imaginário
+    }
 
     dsps_fft2r_fc32(fft_buf, N);   // FFT radix-2 in-place
     dsps_bit_rev_fc32(fft_buf, N); // reordena bit-reversal
     dsps_cplx2reC_fc32(fft_buf, N); // converte para espectro real (0..N/2)
 
-    // re²/im² e a soma usam dsps_mul_f32/dsps_add_f32 direto sobre o fft_buf
-    // intercalado (step=2 pega só a parte real ou só a imaginária); só o log10
-    // final fica em loop manual, pois o esp-dsp não tem função de logaritmo.
-    static float re_sq[N / 2];
-    static float im_sq[N / 2];
-    static float power[N / 2];
-    dsps_mul_f32(&fft_buf[0], &fft_buf[0], re_sq, N / 2, 2, 2, 1); // re_sq[i] = re[i]^2
-    dsps_mul_f32(&fft_buf[1], &fft_buf[1], im_sq, N / 2, 2, 2, 1); // im_sq[i] = im[i]^2
-    dsps_add_f32(re_sq, im_sq, power, N / 2, 1, 1, 1);             // power[i] = re[i]^2 + im[i]^2
-
+    // Mesmo motivo acima: magnitude (re²+im²) também em loop manual, sem stride.
     for (int i = 0; i < N / 2; i++) {
-        magnitudeDb[i] = 10 * log10f(power[i] / (N * N) + 1e-12f);
+        const float re = fft_buf[2 * i + 0];
+        const float im = fft_buf[2 * i + 1];
+        magnitudeDb[i] = 10 * log10f((re * re + im * im) / (N * N) + 1e-12f);
     }
 }
 
