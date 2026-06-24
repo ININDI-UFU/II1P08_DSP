@@ -17,7 +17,6 @@ private:
     uint16_t    _listenPort     = 0;
     bool        _udpAvailable   = false;
     bool        _udpLinked      = false;
-    uint32_t    _base_ms        = 0;
     AsyncUDP    _udp;
     std::function<void(std::string)> _onInput;
 
@@ -131,20 +130,30 @@ public:
         plot(varName, (TickType_t)xTaskGetTickCount(), y, unit);
     }
 
-    // === plot de array com dt fixo ===
+    // === plot de array com dt fixo (eixo X reinicia em 0 a cada chamada) ===
+    // Envia em lotes pequenos (em vez de montar uma única string gigante para o
+    // array inteiro): arrays grandes (ex.: 1024 pontos) geram strings de dezenas
+    // de KB, frágeis tanto para o heap do ESP32 (fragmentação por +=) quanto para
+    // quem está do outro lado (parser/buffer do LasecPlot/Teleplot) — várias
+    // linhas pequenas e válidas do protocolo são bem mais confiáveis.
     template <typename T>
     void plot(const char *varName, uint32_t dt_ms, const T* y, size_t ylen, const char *unit = nullptr) {
-        String str(">");
-        str += varName; str += ":";
-        for (size_t i = 0; i < ylen; i++) {
-            str += String((uint32_t)_base_ms); str += ":";
-            str += String((double)y[i], 6);
-            _base_ms += dt_ms;
-            if (i < ylen - 1) str += ";";
+        constexpr size_t CHUNK = 64;
+        uint32_t t_ms = 0;
+        for (size_t base = 0; base < ylen; base += CHUNK) {
+            const size_t n = (ylen - base < CHUNK) ? (ylen - base) : CHUNK;
+            String str(">");
+            str += varName; str += ":";
+            for (size_t i = 0; i < n; i++) {
+                str += String(t_ms); str += ":";
+                str += String((double)y[base + i], 6);
+                t_ms += dt_ms;
+                if (i < n - 1) str += ";";
+            }
+            if (unit) { str += "\xC2\xA7"; str += unit; }
+            str += WSERIAL_NEWLINE;
+            _send(str);
         }
-        if (unit) { str += "\xC2\xA7"; str += unit; }
-        str += WSERIAL_NEWLINE;
-        _send(str);
     }
 
     void log(const char *text, uint32_t ts_ms = 0) {
