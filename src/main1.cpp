@@ -12,7 +12,6 @@
 
 #include "services/wserial.h"
 #include "dsps_biquad.h"
-#include "dsps_biquad_gen.h"
 
 // ---------- Parâmetros do sinal (iguais ao main0.cpp) ----------
 constexpr float fs = 8000.0f; // frequência de amostragem [Hz]
@@ -26,8 +25,9 @@ constexpr uint32_t SAMPLE_PERIOD_US = (uint32_t)(1000000.0f / fs); // 125 us @ 8
 // amostras/s geradas internamente -- por isso só 1 a cada DECIMATION amostras
 // é enviada para a serial (a geração e o filtro continuam correndo a fs=8 kHz
 // "por debaixo", só a publicação é que é mais lenta). Resultado: ~100 Hz de
-// taxa de atualização no plot, suficiente para acompanhar visualmente os 3
-// tons (o maior, 1.5 kHz, ainda fica bem caracterizado por amostragem).
+// taxa de atualização no plot -- abaixo do critério de Nyquist pros tons de
+// 800 Hz/2.2 kHz, então o gráfico (não o cálculo) mostra um traço com aliasing
+// visual; é só um trade-off de banda da serial, não um sinal errado de verdade.
 constexpr uint32_t DECIMATION = fs / 100; // publica a ~100 amostras/s
 
 // Incremento de fase por amostra (rad/amostra) de cada tom -- equivalente ao
@@ -38,7 +38,20 @@ constexpr float dphi3 = 2.0f * PI * f3 / fs;
 
 // ---------- Estado persistente entre chamadas de loop() ----------
 static float phase1 = 0.0f, phase2 = 0.0f, phase3 = 0.0f; // fase corrente de cada tom
-static float bpfCoeffs[5];                                // coeficientes do biquad (calculados 1x em setup)
+
+// Coeficientes pré-calculados (fórmula RBJ "constant 0dB peak gain BPF",
+// fs=8000Hz, f2=800Hz, Q1=5.41196100, Q2=13.06562965 -- stagger tuning para
+// formar um passa-faixa Butterworth de 4ª ordem, ver main0.cpp) em vez de
+// gerados em tempo de execução por dsps_biquad_gen_bpf0db_f32.
+// [b0, b1, b2, a1, a2], com a0 implícito = 1 (convenção do dsps_biquad_f32).
+static float bpfCoeffs1[5] = { // estágio 1 (Q1, mais largo)
+    0.05150721440245413f, 0.0f, -0.05150721440245413f,
+    -1.534693565180896f, 0.8969855711950917f
+};
+static float bpfCoeffs2[5] = { // estágio 2 (Q2, mais estreito)
+    0.021998737686764813f, 0.0f, -0.021998737686764813f,
+    -1.5824392834631165f, 0.9560025246264705f
+};
 static float w1[2] = {0.0f, 0.0f};                         // estado do 1º estágio do filtro
 static float w2[2] = {0.0f, 0.0f};                         // estado do 2º estágio (em cascata)
 static uint32_t nextSampleUs = 0;                          // instante (us) da próxima amostra
@@ -62,17 +75,14 @@ float gerarAmostra() {
 // "contínuo" em vez de recalcular tudo do zero a cada N amostras.
 float filtrarAmostra(float entrada) {
     float estagio1, saida;
-    dsps_biquad_f32(&entrada, &estagio1, 1, bpfCoeffs, w1); // 1º estágio
-    dsps_biquad_f32(&estagio1, &saida, 1, bpfCoeffs, w2);   // 2º estágio (em série)
+    dsps_biquad_f32(&entrada, &estagio1, 1, bpfCoeffs1, w1); // 1º estágio (Q1)
+    dsps_biquad_f32(&estagio1, &saida, 1, bpfCoeffs2, w2);   // 2º estágio (Q2, em série)
     return saida;
 }
 
 void setup() {
     wserial.begin(115200);
     delay(1000);
-
-    constexpr float bpfQ = 5.0f;
-    dsps_biquad_gen_bpf0db_f32(bpfCoeffs, f2 / fs, bpfQ);
 
     wserial.println("Gerador contínuo: 100 Hz + 800 Hz + 2.2 kHz @ fs=8 kHz (saída ao vivo na serial)");
     nextSampleUs = micros();

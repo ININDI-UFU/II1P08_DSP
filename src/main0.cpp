@@ -11,18 +11,20 @@
 #include "dsps_add.h"
 #include "dsps_view.h"
 #include "dsps_biquad.h"
-#include "dsps_biquad_gen.h"
 #include "dsps_wind_hann.h"
 
 // ---------- Parâmetros do sinal ----------
 constexpr int   N  = 1024;    // número de amostras (potência de 2 -> exigido pela FFT real)
-constexpr float fs = 8000.0f; // frequência de amostragem [Hz]
-constexpr float f1 = 100.0f;  // tom 1 [Hz] (mais distante da banda de 800 Hz)
+constexpr float fs = 8000.0f; // frequência de amostragem 8K[Hz]
+constexpr float f1 = 100.0f;  // tom 1 [Hz] (100 Hz)
 constexpr float f2 = 800.0f;  // tom 2 [Hz] -> é o tom que o filtro passa-faixa isola
 constexpr float f3 = 2200.0f; // tom 3 [Hz] (mais distante da banda de 800 Hz)
 
-// dsps_tone_gen_f32 usa frequência normalizada pela Nyquist (fs/2): freq_norm = f / (fs/2)
-constexpr float toNyquist(float f) { return 2.0f * f / fs; }
+// dsps_tone_gen_f32 usa freq_norm = f/fs (confirmado empiricamente: o período
+// amostrado bate com f/fs, não com f/(fs/2) -- a doc da esp-dsp chama o
+// parâmetro de "Nyquist frequency -1..1", o que sugeria f/(fs/2), mas isso
+// estava dobrando a frequência de todo tom gerado, ex.: "800 Hz" saía a 1600 Hz).
+constexpr float toFreqNorm(float f) { return f / fs; }
 
 // Buffers compartilhados entre as etapas (preenchidos em setup() e enviados ao final)
 static float real_signal[N];          // soma dos 3 tons, no tempo
@@ -36,30 +38,45 @@ void gerarSinal(float *saida) {
     static float tone2[N];
     static float tone3[N];
 
-    dsps_tone_gen_f32(tone1, N, 1.0f, toNyquist(f1), 0.0f);
-    dsps_tone_gen_f32(tone2, N, 1.0f, toNyquist(f2), 0.0f);
-    dsps_tone_gen_f32(tone3, N, 1.0f, toNyquist(f3), 0.0f);
+    dsps_tone_gen_f32(tone1, N, 1.0f, toFreqNorm(f1), 0.0f);
+    dsps_tone_gen_f32(tone2, N, 1.0f, toFreqNorm(f2), 0.0f);
+    dsps_tone_gen_f32(tone3, N, 1.0f, toFreqNorm(f3), 0.0f);
 
     dsps_add_f32(tone1, tone2, saida, N, 1, 1, 1); // saida = tone1 + tone2
     dsps_add_f32(saida, tone3, saida, N, 1, 1, 1); // saida += tone3
 }
 
 // ---------- Etapa 2: filtro passa-faixa (isola só o tom central, f2) ----------
-// Cascata de 2 biquads IIR idênticos (cada um com seu próprio estado w[]): a
-// resposta em frequência fica ao quadrado, dobrando a atenuação (em dB) fora
-// da banda passante sem perder ganho no centro ("bpf0db" = 0 dB em f2).
-void filtrarPassaFaixa(const float *entrada, float *saida) {
-    constexpr float bpfQ = 5.0f;
-    static float bpfCoeffs[5];
-    // dsps_biquad_gen_* normaliza a frequência por fs direto (0..0.5) -- diferente
-    // do toNyquist() usado em gerarSinal(), que normaliza por fs/2.
-    dsps_biquad_gen_bpf0db_f32(bpfCoeffs, f2 / fs, bpfQ);
+// Cascata de 2 biquads IIR no MESMO f2, mas com "stagger tuning": em vez de
+// repetir o mesmo Q duas vezes (o que duplica o mesmo par de polos), usa-se um
+// Q diferente por estágio (Q1 = Q/cos(pi/8), Q2 = Q/cos(3pi/8)) para que os 2
+// pares de polos resultantes formem a resposta de um passa-faixa Butterworth
+// de 4ª ordem de verdade. Ganho no centro continua 0 dB (cada estágio é
+// "bpf0db"), mas a rejeição fora da banda fica ~9 dB melhor do que cascatear
+// 2 estágios idênticos com o mesmo Q "de sistema".
+//
+// Coeficientes pré-calculados (fórmula RBJ "constant 0dB peak gain BPF",
+// fs=8000Hz, f2=800Hz, Q1=5.41196100, Q2=13.06562965) em vez de gerados em
+// tempo de execução por dsps_biquad_gen_bpf0db_f32 -- fs/f2/Q são constantes
+// de compilação, então não há motivo para recalcular seno/cosseno a cada
+// boot, e isso também elimina qualquer divergência entre o que a função
+// geradora da esp-dsp realmente produz e o valor RBJ de referência.
+// [b0, b1, b2, a1, a2], com a0 implícito = 1 (convenção do dsps_biquad_f32).
+static float coeffs1[5] = { // estágio 1 (Q1, mais largo)
+    0.05150721440245413f, 0.0f, -0.05150721440245413f,
+    -1.534693565180896f, 0.8969855711950917f
+};
+static float coeffs2[5] = { // estágio 2 (Q2, mais estreito)
+    0.021998737686764813f, 0.0f, -0.021998737686764813f,
+    -1.5824392834631165f, 0.9560025246264705f
+};
 
+void filtrarPassaFaixa(const float *entrada, float *saida) {
     static float estagio1[N];
     float w1[2] = {0.0f, 0.0f};
     float w2[2] = {0.0f, 0.0f};
-    dsps_biquad_f32(entrada, estagio1, N, bpfCoeffs, w1); // 1º estágio
-    dsps_biquad_f32(estagio1, saida, N, bpfCoeffs, w2);   // 2º estágio (em série)
+    dsps_biquad_f32(entrada, estagio1, N, coeffs1, w1); // 1º estágio (Q1)
+    dsps_biquad_f32(estagio1, saida, N, coeffs2, w2);   // 2º estágio (Q2, em série)
 }
 
 // ---------- Etapa 3: espectro de magnitude em dB (janela + FFT) ----------
