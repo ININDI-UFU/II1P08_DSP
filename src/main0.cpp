@@ -27,9 +27,10 @@ constexpr float f3 = 1500.0f; // tom 3 [Hz]
 constexpr float toNyquist(float f) { return 2.0f * f / fs; }
 
 // Buffers compartilhados entre as etapas (preenchidos em setup() e enviados ao final)
-static float real_signal[N];     // soma dos 3 tons (sinal real, no tempo)
-static float filtered_signal[N]; // saída do filtro passa-faixa (deve restar só o tom de 800 Hz)
-static float magnitude[N / 2];   // espectro de magnitude em dB (0..N/2, eixo de frequência)
+static float real_signal[N];          // soma dos 3 tons, no tempo
+static float filtered_signal[N];      // saída do filtro passa-faixa, no tempo (deve restar só o tom de 800 Hz)
+static float magnitude[N / 2];        // espectro (frequência) do sinal somado, em dB
+static float magnitude_filtered[N / 2]; // espectro (frequência) do sinal filtrado, em dB
 
 // ---------- Etapa 1: gerar o sinal de teste (3 tons somados) ----------
 void gerarSinal(float *saida) {
@@ -96,16 +97,20 @@ void calcularEspectroDb(const float *sinal, float *magnitudeDb) {
 }
 
 // ---------- Etapa 4: enviar tudo para visualização ----------
-void plotarResultados(const float *sinal, const float *filtrado, const float *magnitudeDb) {
+// 4 séries: sinal somado e sinal filtrado no tempo, e os respectivos espectros
+// (magnitude em dB) na frequência -- para comparar diretamente antes/depois do filtro.
+void plotarResultados(const float *sinal, const float *filtrado,
+                       const float *magnitudeDb, const float *magnitudeFiltradoDb) {
     wserial.println("Espectro (FFT) do sinal 250 Hz + 800 Hz + 1.5 kHz @ fs=8 kHz");
 
     // dt_ms=1 aproxima o eixo X por índice de amostra/bin (o período real de
     // amostragem, 1/fs = 0.125 ms, não é representável em ms inteiro).
-    wserial.plot("signal", 1, sinal, N, "V");
-    wserial.plot("filtered", 1, filtrado, N, "V");
-    wserial.plot("magnitude", 1, magnitudeDb, N / 2, "dB");
+    wserial.plot("signal", 1, sinal, N, "V");             // tempo: sinal somado
+    wserial.plot("filtered", 1, filtrado, N, "V");         // tempo: sinal filtrado
+    wserial.plot("magnitude", 1, magnitudeDb, N / 2, "dB");                 // frequência: sinal somado
+    wserial.plot("magnitude_filtered", 1, magnitudeFiltradoDb, N / 2, "dB"); // frequência: sinal filtrado
 
-    dsps_view(magnitudeDb, N / 2, 128, 20, -80, 0, '*'); // gráfico ASCII do espectro
+    dsps_view(magnitudeDb, N / 2, 128, 20, -80, 0, '*'); // gráfico ASCII do espectro (sinal somado)
 }
 
 void setup() {
@@ -121,7 +126,8 @@ void setup() {
     gerarSinal(real_signal);
     filtrarPassaFaixa(real_signal, filtered_signal);
     calcularEspectroDb(real_signal, magnitude);
-    plotarResultados(real_signal, filtered_signal, magnitude);
+    calcularEspectroDb(filtered_signal, magnitude_filtered);
+    plotarResultados(real_signal, filtered_signal, magnitude, magnitude_filtered);
 }
 
 void loop() {
