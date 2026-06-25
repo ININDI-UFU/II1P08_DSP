@@ -4,11 +4,15 @@
 // propria, para ficar facil de seguir e explicar isoladamente.
 #include <Arduino.h>
 #include <math.h>
+#include <string.h>
 
 #include "services/wserial.h"
 #include "dsps_fft2r.h"
 #include "dsps_tone_gen.h"
 #include "dsps_add.h"
+#include "dsps_addc.h"
+#include "dsps_mul.h"
+#include "dsps_mulc.h"
 #include "dsps_view.h"
 #include "dsps_biquad.h"
 #include "dsps_wind_hann.h"
@@ -31,6 +35,7 @@ static float real_signal[N];            // soma dos 3 tons, no tempo
 static float filtered_signal[N];        // saida do filtro passa-faixa, no tempo
 static float magnitude[N / 2];          // espectro do sinal somado, em dB
 static float magnitude_filtered[N / 2]; // espectro do sinal filtrado, em dB
+static float hann[N];                    // janela gerada uma unica vez no setup()
 
 // ---------- Etapa 1: gerar o sinal de teste (3 tons somados) ----------
 void gerarSinal(float *saida) {
@@ -67,22 +72,26 @@ void filtrarPassaFaixa(const float *entrada, float *saida) {
 // ---------- Etapa 3: espectro de magnitude em dB ----------
 void calcularEspectroDb(const float *sinal, float *magnitudeDb) {
     static float fft_buf[N * 2];
-    static float hann[N];
+    static float power_re[N / 2];
+    static float power_im[N / 2];
+    constexpr float power_scale = 1.0f / static_cast<float>(N * N);
+    constexpr float floor_power = 1e-12f;
 
-    dsps_wind_hann_f32(hann, N);
-    for (int i = 0; i < N; i++) {
-        fft_buf[2 * i + 0] = sinal[i] * hann[i];
-        fft_buf[2 * i + 1] = 0.0f;
-    }
+    memset(fft_buf, 0, sizeof(fft_buf));
+    dsps_mul_f32(sinal, hann, fft_buf, N, 1, 1, 2);
 
     dsps_fft2r_fc32(fft_buf, N);
     dsps_bit_rev_fc32(fft_buf, N);
     dsps_cplx2reC_fc32(fft_buf, N);
 
+    dsps_mul_f32(fft_buf, fft_buf, power_re, N / 2, 2, 2, 1);
+    dsps_mul_f32(fft_buf + 1, fft_buf + 1, power_im, N / 2, 2, 2, 1);
+    dsps_add_f32(power_re, power_im, power_re, N / 2, 1, 1, 1);
+    dsps_mulc_f32(power_re, power_re, N / 2, power_scale, 1, 1);
+    dsps_addc_f32(power_re, power_re, N / 2, floor_power, 1, 1);
+
     for (int i = 0; i < N / 2; i++) {
-        const float re = fft_buf[2 * i + 0];
-        const float im = fft_buf[2 * i + 1];
-        magnitudeDb[i] = 10 * log10f((re * re + im * im) / (N * N) + 1e-12f);
+        magnitudeDb[i] = 10.0f * log10f(power_re[i]);
     }
 }
 
@@ -109,6 +118,7 @@ void setup() {
         return;
     }
 
+    dsps_wind_hann_f32(hann, N);
     gerarSinal(real_signal);
     filtrarPassaFaixa(real_signal, filtered_signal);
     calcularEspectroDb(real_signal, magnitude);

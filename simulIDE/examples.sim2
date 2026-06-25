@@ -4,16 +4,16 @@
 <mainCompProps MainCompId="Esp32-2" Program="merged.bin" />
 </item>
 
-<item itemtype="SerialPort" CircId="SerialPort-5" mainComp="false" Show_id="false" Show_Val="false" Pos="228,92" rotation="0" hflip="1" vflip="1" label="SerialPort-5" idLabPos="-20,-32" labelrot="0" valLabPos="-16,20" valLabRot="0" Auto="false" Port="\\.\CNCB0" Baudrate="115200 _Bd" DataBits="8 _bits" StopBits="1 _bits" SerialMon="false" />
+<item itemtype="SerialPort" CircId="SerialPort-5" mainComp="false" Show_id="false" Show_Val="false" Pos="232,92" rotation="0" hflip="1" vflip="1" label="SerialPort-5" idLabPos="-20,-32" labelrot="0" valLabPos="-16,20" valLabRot="0" Auto="false" Port="\\.\CNCB0" Baudrate="921600 _Bd" DataBits="8 _bits" StopBits="1 _bits" SerialMon="false" />
 
-<item itemtype="Tunnel" CircId="Tunnel-6" mainComp="false" Show_id="false" Show_Val="false" Pos="180,100" rotation="0" hflip="1" vflip="1" label="Tunnel-6" idLabPos="-16,-24" labelrot="0" valLabPos="-16,20" valLabRot="0" Name="A" IsBus="false" />
+<item itemtype="Tunnel" CircId="Tunnel-6" mainComp="false" Show_id="false" Show_Val="false" Pos="188,100" rotation="0" hflip="1" vflip="1" label="Tunnel-6" idLabPos="-16,-24" labelrot="0" valLabPos="-16,20" valLabRot="0" Name="TX" IsBus="false" />
 
-<item itemtype="Tunnel" CircId="Tunnel-8" mainComp="false" Show_id="false" Show_Val="false" Pos="144,76" rotation="0" hflip="-1" vflip="1" label="Tunnel-8" idLabPos="-16,-24" labelrot="0" valLabPos="-16,20" valLabRot="0" Name="A" IsBus="false" />
+<item itemtype="Tunnel" CircId="Tunnel-7" mainComp="false" Show_id="false" Show_Val="false" Pos="140,76" rotation="180" hflip="1" vflip="1" label="Tunnel-7" idLabPos="-16,-24" labelrot="0" valLabPos="-16,20" valLabRot="0" Name="TX" IsBus="false" />
 
-<item itemtype="Connector" uid="Connector-1" startpinid="devkitC-4-RX" endpinid="SerialPort-5-pin0" pointList="132,84,188,84" />
+<item itemtype="Connector" uid="Connector-2" startpinid="devkitC-4-RX" endpinid="SerialPort-5-pin0" pointList="132,84,192,84" />
 
-<item itemtype="Connector" uid="Connector-2" startpinid="Tunnel-6-pin" endpinid="SerialPort-5-pin1" pointList="180,100,188,100" />
+<item itemtype="Connector" uid="Connector-3" startpinid="Tunnel-6-pin" endpinid="SerialPort-5-pin1" pointList="188,100,192,100" />
 
-<item itemtype="Connector" uid="Connector-3" startpinid="Tunnel-8-pin" endpinid="devkitC-4-TX" pointList="144,76,132,76" />
+<item itemtype="Connector" uid="Connector-4" startpinid="Tunnel-7-pin" endpinid="devkitC-4-TX" pointList="140,76,132,76" />
 
 </circuit>
