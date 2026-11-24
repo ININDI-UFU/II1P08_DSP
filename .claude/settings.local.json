@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find ~/.platformio -iname \"dsps_view*\" 2>/dev/null)",
+      "Read(//c/Users/admin/.platformio/**)"
+    ]
+  }
+}
