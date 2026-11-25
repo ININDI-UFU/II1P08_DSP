@@ -146,7 +146,7 @@ public:
             str += varName; str += ":";
             for (size_t i = 0; i < n; i++) {
                 str += String(t_ms); str += ":";
-                str += String((double)y[base + i], 6);
+                str += String((double)y[base + i], 3);
                 t_ms += dt_ms;
                 if (i < n - 1) str += ";";
             }
