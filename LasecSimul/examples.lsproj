@@ -13,7 +13,7 @@
         "__ui_valueLabelRotation": 0,
         "__ui_simulideProgram": "merged.bin",
         "__ui_simulideMainCompId": "Esp32-2",
-        "__ui_exposedMcu_mcu1_firmwarePath": "g:\\Meu Drive\\Source Remote\\0II1\\II1P08_DSP\\LasecSimul\\merged.bin"
+        "__ui_exposedMcu_mcu1_firmwarePath": "c:\\Prof_Josue\\0II1\\II1P08_DSP\\LasecSimul\\merged.bin"
       },
       "label": "devkitC-4",
       "showId": true,
@@ -78,7 +78,7 @@
       "id": "component-1795603706455-119425",
       "typeId": "peripherals.lasecplot",
       "properties": {
-        "source_name": "LasecPlot-1"
+        "source_name": "COM0"
       },
       "label": "COM0",
       "showValue": false,
@@ -91,7 +91,7 @@
     }
   ],
   "topology": {
-    "revision": 14,
+    "revision": 16,
     "nodes": [],
     "conductors": [
       {
