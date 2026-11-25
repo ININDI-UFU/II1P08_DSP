@@ -133,11 +133,11 @@ def findAnalogFilterByTargetFreq(fDesejada, ordem, filterType, desvio, isBP):
 
 if __name__ == '__main__':
     fc, _ = findAnalogFilterByTargetFreq(
-        fDesejada=[400, 500],        # Frequência desejada em Hz (use [f1, f2] para bandpass/bandstop)
+        fDesejada=500,        # Frequência desejada em Hz (use [f1, f2] para bandpass/bandstop)
         ordem=2,
-        filterType='bandstop',  # lowpass, highpass, bandpass ou bandstop
+        filterType='lowpass',  # lowpass, highpass, bandpass ou bandstop
         desvio=0.05,
-        isBP=False             # True = banda de passagem (fDesejada com magnitude >= 1-desvio)
+        isBP=True             # True = banda de passagem (fDesejada com magnitude >= 1-desvio)
     )
     print("Frequência de Corte escolhida (Hz):", fc)
 

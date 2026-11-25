@@ -29,7 +29,8 @@ constexpr float f3 = 2200.0f;  // tom acima da banda  -> deve ser atenuado
 // Python: fDesejada=[700, 900], ordem=2, fs=8000, filterType="bandpass", desvio=0.05
 // Cada linha e um biquad {b0, b1, b2, a1, a2} (a0 = 1), que calcula:
 //   y[n] = b0*x[n] + b1*x[n-1] + b2*x[n-2] - a1*y[n-1] - a2*y[n-2]
-float biquads_df2t[2][5] = {
+
+float biquads_df2t[NUM_BIQUADS][5] = {
     {1.553585316e-02f, 3.107170631e-02f, 1.553585316e-02f, -1.345224238e+00f, 8.032745419e-01f},
     {1.000000000e+00f, -2.000000000e+00f, 1.000000000e+00f, -1.590652875e+00f, 8.464108338e-01f},
 };
