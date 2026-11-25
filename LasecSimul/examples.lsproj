@@ -1,0 +1,170 @@
+{
+  "schemaVersion": 2,
+  "components": [
+    {
+      "id": "devkitC-4",
+      "typeId": "subcircuits.esp32_devkitc_v4",
+      "properties": {
+        "__ui_idLabelX": 0,
+        "__ui_idLabelY": -20,
+        "__ui_idLabelRotation": 0,
+        "__ui_valueLabelX": -16,
+        "__ui_valueLabelY": 20,
+        "__ui_valueLabelRotation": 0,
+        "__ui_simulideProgram": "merged.bin",
+        "__ui_simulideMainCompId": "Esp32-2",
+        "__ui_exposedMcu_mcu1_firmwarePath": "g:\\Meu Drive\\Source Remote\\0II1\\II1P08_DSP\\LasecSimul\\merged.bin"
+      },
+      "label": "devkitC-4",
+      "showId": true,
+      "showValue": false,
+      "flipH": false,
+      "flipV": false,
+      "visual": {
+        "x": 44,
+        "y": 28,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "SerialPort-5",
+      "typeId": "peripherals.serialport",
+      "properties": {
+        "__ui_simulideRaw_auto": "false",
+        "__ui_simulideRaw_port": "\\\\.\\CNCB0",
+        "baudrate": 921600,
+        "data_bits": 8,
+        "stop_bits": 1,
+        "__ui_simulideRaw_serialmon": "false",
+        "__ui_idLabelX": -20,
+        "__ui_idLabelY": -32,
+        "__ui_idLabelRotation": 0,
+        "__ui_valueLabelX": -16,
+        "__ui_valueLabelY": 20,
+        "__ui_valueLabelRotation": 0
+      },
+      "label": "SerialPort-5",
+      "showId": false,
+      "showValue": false,
+      "flipH": false,
+      "flipV": false,
+      "visual": {
+        "x": 232,
+        "y": 92,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "Tunnel-6",
+      "typeId": "connectors.tunnel",
+      "properties": {
+        "name": "TX",
+        "__ui_simulideRaw_isbus": "false",
+        "__ui_idLabelX": -16,
+        "__ui_idLabelY": -24,
+        "__ui_idLabelRotation": 0,
+        "__ui_valueLabelX": -16,
+        "__ui_valueLabelY": 20,
+        "__ui_valueLabelRotation": 0
+      },
+      "label": "Tunnel-6",
+      "showId": false,
+      "showValue": false,
+      "flipH": false,
+      "flipV": false,
+      "visual": {
+        "x": 188,
+        "y": 100,
+        "rotation": 0
+      }
+    },
+    {
+      "id": "Tunnel-7",
+      "typeId": "connectors.tunnel",
+      "properties": {
+        "name": "TX",
+        "__ui_simulideRaw_isbus": "false",
+        "__ui_idLabelX": 16.000000000000004,
+        "__ui_idLabelY": 23.999999999999996,
+        "__ui_idLabelRotation": 180,
+        "__ui_valueLabelX": 15.999999999999998,
+        "__ui_valueLabelY": -20.000000000000004,
+        "__ui_valueLabelRotation": 180
+      },
+      "label": "Tunnel-7",
+      "showId": false,
+      "showValue": false,
+      "flipH": false,
+      "flipV": false,
+      "visual": {
+        "x": 140,
+        "y": 76,
+        "rotation": 180
+      }
+    }
+  ],
+  "topology": {
+    "revision": 0,
+    "nodes": [],
+    "conductors": [
+      {
+        "id": "Connector-2",
+        "from": {
+          "kind": "port",
+          "componentId": "devkitC-4",
+          "pinId": "RX"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "SerialPort-5",
+          "pinId": "tx"
+        },
+        "vertices": []
+      },
+      {
+        "id": "Connector-3",
+        "from": {
+          "kind": "port",
+          "componentId": "Tunnel-6",
+          "pinId": "pin"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "SerialPort-5",
+          "pinId": "rx"
+        },
+        "vertices": []
+      },
+      {
+        "id": "Connector-4",
+        "from": {
+          "kind": "port",
+          "componentId": "Tunnel-7",
+          "pinId": "pin"
+        },
+        "to": {
+          "kind": "port",
+          "componentId": "devkitC-4",
+          "pinId": "TX"
+        },
+        "vertices": []
+      }
+    ]
+  },
+  "visual": {
+    "viewport": {
+      "x": 0,
+      "y": 0,
+      "zoom": 1
+    },
+    "wireRoutes": "explicit"
+  },
+  "simulationSettings": {
+    "initialStepSeconds": 0.000001,
+    "minimumStepSeconds": 0.000001,
+    "maximumStepSeconds": 0.000001,
+    "adaptiveTimeStep": false,
+    "timeScale": 1,
+    "maximumNewtonIterations": 100000
+  }
+}
