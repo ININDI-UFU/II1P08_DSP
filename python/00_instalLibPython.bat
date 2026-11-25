@@ -8,3 +8,4 @@ Call pip install --upgrade numpy
 Call pip install --upgrade pyats
 Call pip install --upgrade scipy
 Call pip install --upgrade pyserial
+Call pip install --upgrade soundfile
