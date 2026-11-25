@@ -1,131 +1,103 @@
-// Soma de 3 senoides (250 Hz + 800 Hz + 1.5 kHz) amostradas a fs=8 kHz,
-// filtro passa-faixa, FFT do sinal resultante (esp-dsp) e visualizacao via
-// wserial (LasecPlot/Teleplot). Cada etapa do processamento DSP e uma funcao
-// propria, para ficar facil de seguir e explicar isoladamente.
+// =============================================================================
+//  main0.cpp - Filtro digital passa-faixa + FFT no ESP32 (biblioteca esp-dsp)
+// -----------------------------------------------------------------------------
+//  Roteiro (executado uma unica vez, no setup):
+//    1. Gera um sinal de teste x[n] = soma de 3 senos (100 Hz + 800 Hz + 2200 Hz)
+//    2. Filtra x[n] com um passa-faixa IIR (biquads em cascata) -> y[n]
+//       O filtro deixa passar 800 Hz e atenua 100 Hz e 2200 Hz.
+//    3. Calcula o espectro (FFT, em dB) de x[n] e de y[n]
+//    4. Envia os 4 graficos pela serial (LasecPlot / Teleplot)
+//  Os coeficientes do filtro sao gerados pelo script Python
+//  python/findDigitalFilterIIRBiquadsByTargetFreq.py (veja o README.md).
+// =============================================================================
 #include <Arduino.h>
-#include <math.h>
-#include <string.h>
-
-#include "services/wserial.h"
-#include "dsps_fft2r.h"
-#include "dsps_tone_gen.h"
-#include "dsps_add.h"
-#include "dsps_addc.h"
-#include "dsps_mul.h"
-#include "dsps_mulc.h"
-#include "dsps_view.h"
-#include "dsps_biquad.h"
-#include "dsps_wind_hann.h"
+#include "services/wserial.h"  // envio de graficos pela serial
+#include "dsps_tone_gen.h"     // esp-dsp: gerador de senos (tons)
+#include "dsps_add.h"          // esp-dsp: soma de vetores
+#include "dsps_biquad.h"       // esp-dsp: filtro IIR de 2a ordem (biquad)
+#include "dsps_fft2r.h"        // esp-dsp: FFT radix-2
+#include "dsps_wind_hann.h"    // esp-dsp: janela de Hann
 
 // ---------- Parametros do sinal ----------
-constexpr int   N  = 1024;    // numero de amostras (potencia de 2 -> exigido pela FFT real)
-constexpr float fs = 8000.0f; // frequencia de amostragem 8K[Hz]
-constexpr float f1 = 100.0f;  // tom 1 [Hz] (100 Hz)
-constexpr float f2 = 800.0f;  // tom 2 [Hz] -> e o tom que o filtro passa-faixa isola
-constexpr float f3 = 2200.0f; // tom 3 [Hz] (mais distante da banda de 800 Hz)
+constexpr int   N  = 1024;     // numero de amostras (a FFT exige potencia de 2)
+constexpr float fs = 8000.0f;  // frequencia de amostragem [Hz]
+constexpr float f1 = 100.0f;   // tom abaixo da banda -> deve ser atenuado
+constexpr float f2 = 800.0f;   // tom dentro da banda -> deve passar
+constexpr float f3 = 2200.0f;  // tom acima da banda  -> deve ser atenuado
 
-// dsps_tone_gen_f32 usa freq_norm = f/fs (confirmado empiricamente: o periodo
-// amostrado bate com f/fs, nao com f/(fs/2) -- a doc da esp-dsp chama o
-// parametro de "Nyquist frequency -1..1", o que sugeria f/(fs/2), mas isso
-// estava dobrando a frequencia de todo tom gerado, ex.: "800 Hz" saia a 1600 Hz).
-constexpr float toFreqNorm(float f) { return f / fs; }
+// ---------- Coeficientes do filtro (copiados da saida do Python) ----------
+// Python: fDesejada=[700, 900], ordem=2, fs=8000, filterType="bandpass", desvio=0.05
+// Cada linha e um biquad {b0, b1, b2, a1, a2} (a0 = 1), que calcula:
+//   y[n] = b0*x[n] + b1*x[n-1] + b2*x[n-2] - a1*y[n-1] - a2*y[n-2]
+float biquads_df2t[2][5] = {
+    {1.553585316e-02f, 3.107170631e-02f, 1.553585316e-02f, -1.345224238e+00f, 8.032745419e-01f},
+    {1.000000000e+00f, -2.000000000e+00f, 1.000000000e+00f, -1.590652875e+00f, 8.464108338e-01f},
+};
+constexpr int NUM_BIQUADS = sizeof(biquads_df2t) / sizeof(biquads_df2t[0]);  // = numero de linhas
 
-// Buffers compartilhados entre as etapas (preenchidos em setup() e enviados ao final)
-static float real_signal[N];            // soma dos 3 tons, no tempo
-static float filtered_signal[N];        // saida do filtro passa-faixa, no tempo
-static float magnitude[N / 2];          // espectro do sinal somado, em dB
-static float magnitude_filtered[N / 2]; // espectro do sinal filtrado, em dB
-static float hann[N];                    // janela gerada uma unica vez no setup()
+// ---------- Vetores de amostras ----------
+float x[N];         // sinal original
+float y[N];         // sinal filtrado
+float janela[N];    // janela de Hann (aplicada antes da FFT)
+float X_dB[N / 2];  // espectro de x em dB (raias de 0 ate fs/2)
+float Y_dB[N / 2];  // espectro de y em dB
 
-// ---------- Etapa 1: gerar o sinal de teste (3 tons somados) ----------
-void gerarSinal(float *saida) {
-    static float tone1[N];
-    static float tone2[N];
-    static float tone3[N];
-
-    dsps_tone_gen_f32(tone1, N, 1.0f, toFreqNorm(f1), 0.0f);
-    dsps_tone_gen_f32(tone2, N, 1.0f, toFreqNorm(f2), 0.0f);
-    dsps_tone_gen_f32(tone3, N, 1.0f, toFreqNorm(f3), 0.0f);
-
-    dsps_add_f32(tone1, tone2, saida, N, 1, 1, 1);
-    dsps_add_f32(saida, tone3, saida, N, 1, 1, 1);
+// 1. Gera sinal[n] = sen(2*pi*f1*n/fs) + sen(2*pi*f2*n/fs) + sen(2*pi*f3*n/fs)
+//    dsps_tone_gen_f32(saida, N, amplitude, f/fs, fase em graus)
+//    Atencao: a frequencia e normalizada por fs (f/fs), e NAO por fs/2,
+//    apesar de a documentacao da esp-dsp falar em "Nyquist -1..1".
+void gerarSinal(float *sinal) {
+    static float tom[N];                            // vetor auxiliar: um tom por vez
+    dsps_tone_gen_f32(sinal, N, 1.0f, f1 / fs, 0);  // sinal = tom de f1
+    dsps_tone_gen_f32(tom, N, 1.0f, f2 / fs, 0);    // tom   = tom de f2
+    dsps_add_f32(sinal, tom, sinal, N, 1, 1, 1);    // sinal = sinal + tom
+    dsps_tone_gen_f32(tom, N, 1.0f, f3 / fs, 0);    // tom   = tom de f3
+    dsps_add_f32(sinal, tom, sinal, N, 1, 1, 1);    // sinal = sinal + tom
 }
 
-// ---------- Etapa 2: filtro passa-faixa ----------
-static float coeffs1[5] = {
-    0.05150721440245413f, 0.0f, -0.05150721440245413f,
-    -1.534693565180896f, 0.8969855711950917f
-};
-static float coeffs2[5] = {
-    0.021998737686764813f, 0.0f, -0.021998737686764813f,
-    -1.5824392834631165f, 0.9560025246264705f
-};
-
-void filtrarPassaFaixa(const float *entrada, float *saida) {
-    static float estagio1[N];
-    float w1[2] = {0.0f, 0.0f};
-    float w2[2] = {0.0f, 0.0f};
-    dsps_biquad_f32(entrada, estagio1, N, coeffs1, w1);
-    dsps_biquad_f32(estagio1, saida, N, coeffs2, w2);
-}
-
-// ---------- Etapa 3: espectro de magnitude em dB ----------
-void calcularEspectroDb(const float *sinal, float *magnitudeDb) {
-    static float fft_buf[N * 2];
-    static float power_re[N / 2];
-    static float power_im[N / 2];
-    constexpr float power_scale = 1.0f / static_cast<float>(N * N);
-    constexpr float floor_power = 1e-12f;
-
-    memset(fft_buf, 0, sizeof(fft_buf));
-    dsps_mul_f32(sinal, hann, fft_buf, N, 1, 1, 2);
-
-    dsps_fft2r_fc32(fft_buf, N);
-    dsps_bit_rev_fc32(fft_buf, N);
-    dsps_cplx2reC_fc32(fft_buf, N);
-
-    dsps_mul_f32(fft_buf, fft_buf, power_re, N / 2, 2, 2, 1);
-    dsps_mul_f32(fft_buf + 1, fft_buf + 1, power_im, N / 2, 2, 2, 1);
-    dsps_add_f32(power_re, power_im, power_re, N / 2, 1, 1, 1);
-    dsps_mulc_f32(power_re, power_re, N / 2, power_scale, 1, 1);
-    dsps_addc_f32(power_re, power_re, N / 2, floor_power, 1, 1);
-
-    for (int i = 0; i < N / 2; i++) {
-        magnitudeDb[i] = 10.0f * log10f(power_re[i]);
+// 2. Passa o sinal por todos os biquads, um depois do outro (cascata)
+void filtrar(const float *entrada, float *saida) {
+    memcpy(saida, entrada, N * sizeof(float));  // saida comeca como copia da entrada
+    for (int k = 0; k < NUM_BIQUADS; k++) {
+        float w[2] = {0, 0};                                // memoria do biquad k (comeca zerada)
+        dsps_biquad_f32(saida, saida, N, biquads_df2t[k], w);  // saida = biquad_k(saida)
     }
 }
 
-// ---------- Etapa 4: enviar tudo para visualizacao ----------
-void plotarResultados(const float *sinal, const float *filtrado,
-                      const float *magnitudeDb, const float *magnitudeFiltradoDb) {
-    wserial.println("Espectro (FFT) do sinal 100 Hz + 800 Hz + 2.2 kHz @ fs=8 kHz");
-
-    wserial.plot("signal", 1, sinal, N, "V");
-    wserial.plot("filtered", 1, filtrado, N, "V");
-    wserial.plot("magnitude", 1, magnitudeDb, N / 2, "dB");
-    wserial.plot("magnitude_filtered", 1, magnitudeFiltradoDb, N / 2, "dB");
-
-    dsps_view(magnitudeDb, N / 2, 128, 20, -80, 0, '*');
+// 3. Espectro em dB: janela -> FFT -> modulo |X[k]| -> dB
+void calcularEspectroDb(const float *sinal, float *magDb) {
+    static float buf[2 * N];  // complexos intercalados: re0, im0, re1, im1, ...
+    for (int n = 0; n < N; n++) {
+        buf[2 * n]     = sinal[n] * janela[n];  // parte real = sinal janelado
+        buf[2 * n + 1] = 0;                     // parte imaginaria = 0 (sinal real)
+    }
+    dsps_fft2r_fc32(buf, N);    // FFT (as raias saem embaralhadas, em "bit reverso")
+    dsps_bit_rev_fc32(buf, N);  // reordena as raias: 0, 1, 2, ..., N-1
+    for (int k = 0; k < N / 2; k++) {  // so ate fs/2: a outra metade e espelhada
+        float re = buf[2 * k], im = buf[2 * k + 1];
+        magDb[k] = 20 * log10f(sqrtf(re * re + im * im) / N + 1e-6f);  // +1e-6 evita log(0)
+    }
 }
 
 void setup() {
-    wserial.begin(115200);
+    wserial.begin(921600);  // mesma velocidade do monitor_speed do platformio.ini
     delay(1000);
 
-    esp_err_t ret = dsps_fft2r_init_fc32(NULL, N);
-    if (ret != ESP_OK) {
-        wserial.println(String("Falha ao inicializar FFT: ") + ret);
-        return;
-    }
+    dsps_fft2r_init_fc32(NULL, N);  // prepara a tabela de senos/cossenos da FFT
+    dsps_wind_hann_f32(janela, N);  // calcula a janela de Hann (uma unica vez)
 
-    dsps_wind_hann_f32(hann, N);
-    gerarSinal(real_signal);
-    filtrarPassaFaixa(real_signal, filtered_signal);
-    calcularEspectroDb(real_signal, magnitude);
-    calcularEspectroDb(filtered_signal, magnitude_filtered);
-    plotarResultados(real_signal, filtered_signal, magnitude, magnitude_filtered);
+    gerarSinal(x);                // 1. x[n]
+    filtrar(x, y);                // 2. y[n]
+    calcularEspectroDb(x, X_dB);  // 3. |X| em dB
+    calcularEspectroDb(y, Y_dB);  //    |Y| em dB
+
+    // 4. Graficos. Eixo horizontal = indice: amostra n (tempo) ou raia k (f = k*fs/N)
+    wserial.plot("x", 1, x, N, "V");
+    wserial.plot("y", 1, y, N, "V");
+    wserial.plot("X_dB", 1, X_dB, N / 2, "dB");
+    wserial.plot("Y_dB", 1, Y_dB, N / 2, "dB");
 }
 
 void loop() {
-    wserial.update();
+    wserial.update();  // nada a processar: so mantem a serial atendida
 }

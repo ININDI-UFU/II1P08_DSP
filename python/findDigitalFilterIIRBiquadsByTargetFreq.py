@@ -148,9 +148,12 @@ def formatBiquadsForC(sos, nome_array="biquads_df2t", incluir_a0=False, casas=9)
 
     Por padrao usa [b0, b1, b2, a1, a2], ideal para Direct Form II Transposto.
     Use incluir_a0=True para gerar [b0, b1, b2, a0, a1, a2].
+
+    O array sai como "float" (sem const) porque dsps_biquad_f32 do esp-dsp
+    recebe "float *coef": assim o bloco pode ser colado direto no firmware.
     """
     matriz = sos if incluir_a0 else biquads_df2t(sos)
-    linhas = [f"const float {nome_array}[{matriz.shape[0]}][{matriz.shape[1]}] = {{"]
+    linhas = [f"float {nome_array}[{matriz.shape[0]}][{matriz.shape[1]}] = {{"]
 
     for secao in matriz:
         valores = ", ".join(f"{valor:.{casas}e}f" for valor in secao)
@@ -206,15 +209,17 @@ def _plotar_resultado(fDesejada, fs, filterType, fc, f_complementar_hz, magnitud
 
 
 if __name__ == '__main__':
+    # Exemplo usado em src/main0.cpp: passa-faixa que deixa passar 800 Hz
+    # e atenua 100 Hz e 2200 Hz, com fs = 8 kHz.
     sos, fc, f_comp = findDigitalFilterIIRBiquadsByTargetFreq(
-        fDesejada=[400, 500],  # Frequência desejada em Hz (use [f1, f2] para bandpass/bandstop)
-        ordem=10,
-        fs=1600.0,
+        fDesejada=[700, 900],   # Hz. Numero para lowpass/highpass; [f1, f2] para bandpass/bandstop
+        ordem=2,                # par >= 2. Em bandpass/bandstop gera "ordem" biquads; senao ordem/2
+        fs=8000.0,              # frequencia de amostragem do firmware (Hz)
         filterType="bandpass",  # lowpass, highpass, bandpass ou bandstop
-        desvio=0.05,
-        isBP=True,
+        desvio=0.05,            # em fDesejada a magnitude sera 1 - desvio (isBP=True) ou desvio (isBP=False)
+        isBP=True,              # True: fDesejada esta na banda de passagem
         plot=True,
     )
     print("Frequência(s) de Corte escolhida(s) (Hz):", fc)
-    print("\nCoeficientes para Direct Form II Transposto:")
+    print("\nCole o bloco abaixo em src/main0.cpp (substituindo o array biquads_df2t):\n")
     print(formatBiquadsForC(sos))

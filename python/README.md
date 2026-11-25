@@ -366,7 +366,7 @@ sos, fc, fcomp = findDigitalFilterIIRBiquadsByTargetFreq(
 
 Confirmado por `sosfreqz`: `|H(100 Hz)| = 0.95` e `|H(258.19 Hz)| = 0.05`, exatamente.
 
-### 4.5 Exemplo numérico verificado (bandpass digital — igual ao `__main__` do arquivo)
+### 4.5 Exemplo numérico verificado (bandpass digital)
 
 ```python
 sos, fc, fcomp = findDigitalFilterIIRBiquadsByTargetFreq(
@@ -403,12 +403,15 @@ def biquads_df2t(sos):
 firmware:
 
 ```c
-const float biquads_df2t[10][5] = {
+float biquads_df2t[10][5] = {
     {7.179004984e-08f, -1.435800997e-07f, 7.179004984e-08f, 2.681785934e-01f, 6.381442659e-01f},
     {1.000000000e+00f, -2.000000000e+00f, 1.000000000e+00f, 3.836845981e-01f, 6.424150990e-01f},
     ...
 };
 ```
+
+O array sai **sem `const`** de propósito: `dsps_biquad_f32` do esp-dsp recebe
+`float *coef`, e com `const` o firmware não compilaria.
 
 Use `incluir_a0=True` se a sua função de DSP espera os 6 coeficientes
 (`[b0, b1, b2, a0, a1, a2]`) em vez de 5.
